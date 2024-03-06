@@ -7,9 +7,10 @@ from PIL import Image
 from torchvision import transforms
 from scipy import ndimage
 
+
 class BaseDataSet(Dataset):
     def __init__(self, root, split, mean, std, base_size=None, augment=True, val=False,
-                crop_size=321, scale=True, flip=True, rotate=False, blur=False, return_id=False):
+                 crop_size=321, scale=True, flip=True, rotate=False, blur=False, return_id=False):
         self.root = root
         self.split = split
         self.mean = mean
@@ -33,7 +34,7 @@ class BaseDataSet(Dataset):
 
     def _set_files(self):
         raise NotImplementedError
-    
+
     def _load_data(self, index):
         raise NotImplementedError
 
@@ -52,8 +53,8 @@ class BaseDataSet(Dataset):
 
             # Center Crop
             h, w = label.shape
-            start_h = (h - self.crop_size )// 2
-            start_w = (w - self.crop_size )// 2
+            start_h = (h - self.crop_size) // 2
+            start_w = (w - self.crop_size) // 2
             end_h = start_h + self.crop_size
             end_w = start_w + self.crop_size
             image = image[start_h:end_h, start_w:end_w]
@@ -65,22 +66,28 @@ class BaseDataSet(Dataset):
         # Scaling, we set the bigger to base size, and the smaller 
         # one is rescaled to maintain the same ratio, if we don't have any obj in the image, re-do the processing
         if self.base_size:
-            if self.scale:
-                longside = random.randint(int(self.base_size*0.5), int(self.base_size*2.0))
-            else:
-                longside = self.base_size
-            h, w = (longside, int(1.0 * longside * w / h + 0.5)) if h > w else (int(1.0 * longside * h / w + 0.5), longside)
-            image = cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
-            label = cv2.resize(label, (w, h), interpolation=cv2.INTER_NEAREST)
-    
+            # if self.scale:
+            #     longside = random.randint(int(self.base_size * 0.5), int(self.base_size * 2.0))
+            # else:
+            #     longside = self.base_size
+            # h, w = (longside, int(1.0 * longside * w / h + 0.5)) if h > w else (
+            # int(1.0 * longside * h / w + 0.5), longside)
+            # image = cv2.resize(image, (w, h), interpolation=cv2.INTER_LINEAR)
+            # label = cv2.resize(label, (w, h), interpolation=cv2.INTER_NEAREST)
+            image = cv2.resize(image, (self.base_size, self.base_size), interpolation=cv2.INTER_LINEAR)
+            label = cv2.resize(label, (self.base_size, self.base_size), interpolation=cv2.INTER_NEAREST)
+        else:
+            pass  # 不缩放原图
         h, w, _ = image.shape
         # Rotate the image with an angle between -10 and 10
         if self.rotate:
             angle = random.randint(-10, 10)
             center = (w / 2, h / 2)
             rot_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-            image = cv2.warpAffine(image, rot_matrix, (w, h), flags=cv2.INTER_LINEAR)#, borderMode=cv2.BORDER_REFLECT)
-            label = cv2.warpAffine(label, rot_matrix, (w, h), flags=cv2.INTER_NEAREST)#,  borderMode=cv2.BORDER_REFLECT)
+            image = cv2.warpAffine(image, rot_matrix, (w, h),
+                                   flags=cv2.INTER_LINEAR)  # , borderMode=cv2.BORDER_REFLECT)
+            label = cv2.warpAffine(label, rot_matrix, (w, h),
+                                   flags=cv2.INTER_NEAREST)  # ,  borderMode=cv2.BORDER_REFLECT)
 
         # Padding to return the correct crop size
         if self.crop_size:
@@ -91,11 +98,11 @@ class BaseDataSet(Dataset):
                 "bottom": pad_h,
                 "left": 0,
                 "right": pad_w,
-                "borderType": cv2.BORDER_CONSTANT,}
+                "borderType": cv2.BORDER_CONSTANT, }
             if pad_h > 0 or pad_w > 0:
                 image = cv2.copyMakeBorder(image, value=0, **pad_kwargs)
                 label = cv2.copyMakeBorder(label, value=0, **pad_kwargs)
-            
+
             # Cropping 
             h, w, _ = image.shape
             start_h = random.randint(0, h - self.crop_size)
@@ -113,12 +120,14 @@ class BaseDataSet(Dataset):
 
         # Gaussian Blud (sigma between 0 and 1.5)
         if self.blur:
-            sigma = random.random()
-            ksize = int(3.3 * sigma)
-            ksize = ksize + 1 if ksize % 2 == 0 else ksize
-            image = cv2.GaussianBlur(image, (ksize, ksize), sigmaX=sigma, sigmaY=sigma, borderType=cv2.BORDER_REFLECT_101)
+            if random.random() > 0.5:
+                sigma = random.random()
+                ksize = int(3.3 * sigma)
+                ksize = ksize + 1 if ksize % 2 == 0 else ksize
+                image = cv2.GaussianBlur(image, (ksize, ksize), sigmaX=sigma, sigmaY=sigma,
+                                         borderType=cv2.BORDER_REFLECT_101)
         return image, label
-        
+
     def __len__(self):
         return len(self.files)
 
@@ -128,12 +137,13 @@ class BaseDataSet(Dataset):
             image, label = self._val_augmentation(image, label)
         elif self.augment:
             image, label = self._augmentation(image, label)
-
-        label = torch.from_numpy(np.array(label, dtype=np.int32)).long()
-        image = Image.fromarray(np.uint8(image))
-        if self.return_id:
-            return  self.normalize(self.to_tensor(image)), label, image_id
-        return self.normalize(self.to_tensor(image)), label
+        # cv2.namedWindow("img", cv2.WINDOW_NORMAL), cv2.imshow("img", np.uint8(image)), cv2.waitKey()
+        # image val(0,255). label val clss_idx
+        label = torch.from_numpy(np.array(label, dtype=np.int32)).long()  # int64
+        image = Image.fromarray(np.uint8(image))  # numpy to PIL
+        if self.return_id:  # 是否返回图片名称
+            return self.normalize(self.to_tensor(image)), label, image_id
+        return self.normalize(self.to_tensor(image)), label  # ->(3,h,w), (h,w). image has normalized, label still cls_id
 
     def __repr__(self):
         fmt_str = "Dataset: " + self.__class__.__name__ + "\n"
@@ -141,4 +151,3 @@ class BaseDataSet(Dataset):
         fmt_str += "    Split: {}\n".format(self.split)
         fmt_str += "    Root: {}".format(self.root)
         return fmt_str
-

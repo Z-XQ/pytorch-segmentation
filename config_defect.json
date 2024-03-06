@@ -1,0 +1,78 @@
+{
+    "arch": {
+        "args": {
+            "backbone": "resnet18",
+            "freeze_backbone": false,
+            "freeze_bn": false
+        },
+        "type": "SegNet"
+    },
+    "freeze_val": true,
+    "ignore_index": 255,
+    "loss": "CrossEntropyLoss2d",
+    "lr_scheduler": {
+        "args": {},
+        "type": "Poly"
+    },
+    "n_gpu": 2,
+    "name": "SegNet",
+    "optimizer": {
+        "args": {
+            "lr": 0.01,
+            "momentum": 0.9,
+            "weight_decay": 0.0001
+        },
+        "differential_lr": true,
+        "type": "SGD"
+    },
+    "train_loader": {
+        "args": {
+            "augment": true,
+            "base_size": 1024,
+            "batch_size": 4,
+            "blur": true,
+            "crop_size": 0,
+            "data_dir": "D:\\zxq\\data\\df\\lens_base\\all_ng_label",
+            "flip": true,
+            "label_id_dict": {
+                "bg": 0,
+                "crack": 3,
+                "crush": 2,
+                "feather": 5,
+                "glue": 1,
+                "other": 6,
+                "white_dot": 4
+            },
+            "num_workers": 8,
+            "rotate": true,
+            "scale": true,
+            "shuffle": true,
+            "split": "train"
+        },
+        "type": "Defect"
+    },
+    "trainer": {
+        "early_stop": 10,
+        "epochs": 80,
+        "log_dir": "saved/runs",
+        "log_per_iter": 20,
+        "monitor": "max Mean_IoU",
+        "save_dir": "saved/",
+        "save_period": 10,
+        "tensorboard": true,
+        "val": false,
+        "val_per_epochs": 5
+    },
+    "use_synch_bn": false,
+    "val_loader": {
+        "args": {
+            "batch_size": 2,
+            "crop_size": 480,
+            "data_dir": "D:\\zxq\\data\\df\\lens_base\\all_ng_label",
+            "num_workers": 4,
+            "split": "val",
+            "val": true
+        },
+        "type": "Defect"
+    }
+}

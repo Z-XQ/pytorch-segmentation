@@ -111,6 +111,12 @@ For inference, we need a PyTorch trained model, the images we'd like to segment 
 
 ```bash
 python inference.py --config config.json --model best_model.pth --images images_folder
+
+python inference.py --config config.json 
+--model saved\SegNet\02-29_13-58\best_model.pth 
+--images D:\zxq\data\cityscapes\leftImg8bit_trainvaltest\leftImg8bit\test\berlin
+--mode sliding
+--extension png
 ```
 
 The predictions will be saved as `.png` images using the default palette in the passed fodler name, if not, `outputs\` is used, for Pacal VOC the default palette is:

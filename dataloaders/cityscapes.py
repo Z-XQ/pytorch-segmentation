@@ -11,11 +11,12 @@ from torchvision import transforms
 
 ignore_label = 255
 ID_TO_TRAINID = {-1: ignore_label, 0: ignore_label, 1: ignore_label, 2: ignore_label,
-                    3: ignore_label, 4: ignore_label, 5: ignore_label, 6: ignore_label,
-                    7: 0, 8: 1, 9: ignore_label, 10: ignore_label, 11: 2, 12: 3, 13: 4,
-                    14: ignore_label, 15: ignore_label, 16: ignore_label, 17: 5,
-                    18: ignore_label, 19: 6, 20: 7, 21: 8, 22: 9, 23: 10, 24: 11, 25: 12, 26: 13, 27: 14,
-                    28: 15, 29: ignore_label, 30: ignore_label, 31: 16, 32: 17, 33: 18}
+                 3: ignore_label, 4: ignore_label, 5: ignore_label, 6: ignore_label,
+                 7: 0, 8: 1, 9: ignore_label, 10: ignore_label, 11: 2, 12: 3, 13: 4,
+                 14: ignore_label, 15: ignore_label, 16: ignore_label, 17: 5,
+                 18: ignore_label, 19: 6, 20: 7, 21: 8, 22: 9, 23: 10, 24: 11, 25: 12, 26: 13, 27: 14,
+                 28: 15, 29: ignore_label, 30: ignore_label, 31: 16, 32: 17, 33: 18}
+
 
 class CityScapesDataset(BaseDataSet):
     def __init__(self, mode='fine', **kwargs):
@@ -27,7 +28,7 @@ class CityScapesDataset(BaseDataSet):
 
     def _set_files(self):
         assert (self.mode == 'fine' and self.split in ['train', 'val']) or \
-        (self.mode == 'coarse' and self.split in ['train', 'train_extra', 'val'])
+               (self.mode == 'coarse' and self.split in ['train', 'train_extra', 'val'])
 
         SUFIX = '_gtFine_labelIds.png'
         if self.mode == 'coarse':
@@ -49,17 +50,16 @@ class CityScapesDataset(BaseDataSet):
         image_path, label_path = self.files[index]
         image_id = os.path.splitext(os.path.basename(image_path))[0]
         image = np.asarray(Image.open(image_path).convert('RGB'), dtype=np.float32)
-        label = np.asarray(Image.open(label_path), dtype=np.int32)
-        for k, v in self.id_to_trainId.items():
+        label = np.asarray(Image.open(label_path), dtype=np.int32)  # 载入原始标注的label图像(h,w)
+        for k, v in self.id_to_trainId.items():  # 将label图像中类别，统一映射到其他类别。
             label[label == k] = v
-        return image, label, image_id
-
+        return image, label, image_id  # (h,w,3), (h,w), image file name
 
 
 class CityScapes(BaseDataLoader):
-    def __init__(self, data_dir, batch_size, split, crop_size=None, base_size=None, scale=True, num_workers=1, mode='fine', val=False,
-                    shuffle=False, flip=False, rotate=False, blur= False, augment=False, val_split= None, return_id=False):
-
+    def __init__(self, data_dir, batch_size, split, crop_size=None, base_size=None, scale=True, num_workers=1,
+                 mode='fine', val=False,
+                 shuffle=False, flip=False, rotate=False, blur=False, augment=False, val_split=None, return_id=False):
         self.MEAN = [0.28689529, 0.32513294, 0.28389176]
         self.STD = [0.17613647, 0.18099176, 0.17772235]
 
@@ -78,8 +78,7 @@ class CityScapes(BaseDataLoader):
             'return_id': return_id,
             'val': val
         }
-
+        # dataset
         self.dataset = CityScapesDataset(mode=mode, **kwargs)
+        # dataloader
         super(CityScapes, self).__init__(self.dataset, batch_size, shuffle, num_workers, val_split)
-
-

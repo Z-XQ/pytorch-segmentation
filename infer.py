@@ -1,4 +1,7 @@
 import argparse
+from time import time
+
+import cv2
 import scipy
 import os
 import numpy as np
@@ -16,6 +19,17 @@ import dataloaders
 import models
 from utils.helpers import colorize_mask
 from collections import OrderedDict
+
+colors_list = [(0, 0, 0),
+               (0, 0, 128),
+               (0, 128, 0),
+               (128, 0, 0),
+               (128, 128, 0),
+               (128, 0, 128),
+               (0, 128, 128),
+               (0, 0, 255),
+               (0, 255, 0)
+                ]
 
 
 def pad_image(img, target_size):
@@ -95,6 +109,46 @@ def save_images(image, mask, output_path, image_file, palette):
     # mask_img.save(os.path.join(output_path, image_file+'.png'))
 
 
+def save_images_fp_fn(image, prediction, output, img_file, colors_list):
+    image = np.asarray(image, dtype=np.float32)
+    orig_image = image.copy()
+    class_num = prediction.shape[0]
+
+    base_name = os.path.basename(img_file)
+    file_ext = base_name.split(".")[-1]
+    json_path = img_file.replace(file_ext, "json")
+    if os.path.exists(json_path):
+        is_true_ng = True
+    else:
+        is_true_ng = False
+
+    save_fn_path = os.path.join(output, "fn")
+    save_fp_path = os.path.join(output, "fp")
+    os.makedirs(save_fn_path, exist_ok=True)
+    os.makedirs(save_fp_path, exist_ok=True)
+    prediction_ng = False
+    for i in range(1, class_num):
+        mask = np.zeros((image.shape[0], image.shape[1]), np.uint8)
+        mask[prediction == i] = 255
+        # cv2.namedWindow("mask", cv2.WINDOW_NORMAL), cv2.imshow("mask", mask), cv2.waitKey()
+        cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if len(cnts) > 0:
+            prediction_ng = True
+            cv2.drawContours(image, cnts, -1, colors_list[i], 3)
+        # cv2.namedWindow("image", cv2.WINDOW_NORMAL), cv2.imshow("image", np.uint8(image)), cv2.waitKey()
+
+    # fn
+    if is_true_ng and prediction_ng is False:
+        save_full_path = os.path.join(save_fn_path, base_name)
+    # fp
+    elif is_true_ng is False and prediction_ng:
+        save_full_path = os.path.join(save_fp_path, base_name)
+    else:
+        save_full_path = os.path.join(output, base_name)
+    total_image = cv2.hconcat([orig_image, image])
+    cv2.imwrite(save_full_path, total_image)
+
+
 def main():
     args = parse_arguments()
     config = json.load(open(args.config))
@@ -102,15 +156,11 @@ def main():
     # Dataset used for training the model
     dataset_type = config['train_loader']['type']
     assert dataset_type in ['VOC', 'COCO', 'CityScapes', 'ADE20K', 'DeepScene', 'Defect']
-    if dataset_type == 'CityScapes':  # 大图的缩放比例，整图预测
-        scales = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25]
-    else:
-        scales = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+
     loader = getattr(dataloaders, config['train_loader']['type'])(**config['train_loader']['args'])
     to_tensor = transforms.ToTensor()
     normalize = transforms.Normalize(loader.MEAN, loader.STD)
     num_classes = loader.dataset.num_classes
-    palette = loader.dataset.palette
 
     # Model
     model = getattr(models, config['arch']['type'])(num_classes, **config['arch']['args'])
@@ -138,25 +188,29 @@ def main():
     model.to(device)
     model.eval()
 
-    if not os.path.exists('outputs'):
-        os.makedirs('outputs')
-
-    image_files = sorted(glob(os.path.join(args.images, f'*.{args.extension}')))
+    output = args.images + "_result"
+    os.makedirs(output, exist_ok=True)
+    image_files = []
+    for root_, dirs_, files in os.walk(args.images):
+        for file_name in files:
+            file_ex = file_name.split(".")[-1]
+            if file_ex in ["png", "jpg", "jpeg", "bmp", "tif"]:
+                image_path = os.path.join(root_, file_name)
+                image_files.append(image_path)
+    input_size = config['train_loader']['args']['base_size']
     with torch.no_grad():
         tbar = tqdm(image_files, ncols=100)
         for img_file in tbar:
-            image = Image.open(img_file).convert('RGB')
+            start_time = time()
+            image = np.asarray(Image.open(img_file).convert('RGB'), dtype=np.float32)
+            image = cv2.resize(image, (input_size, input_size), interpolation=cv2.INTER_LINEAR)
+            image = Image.fromarray(np.uint8(image))
             input = normalize(to_tensor(image)).unsqueeze(0)
-
-            if args.mode == 'multiscale':
-                prediction = multi_scale_predict(model, input, scales, num_classes, device)
-            elif args.mode == 'sliding':
-                prediction = sliding_predict(model, input, num_classes)
-            else:
-                prediction = model(input.to(device))
-                prediction = prediction.squeeze(0).cpu().numpy()
+            prediction = model(input.to(device))
+            prediction = prediction.squeeze(0).cpu().numpy()
             prediction = F.softmax(torch.from_numpy(prediction), dim=0).argmax(0).cpu().numpy()
-            save_images(image, prediction, args.output, img_file, palette)
+            print("infer time: {}".format(time() - start_time))
+            save_images_fp_fn(image, prediction, output, img_file, colors_list)
 
 
 def parse_arguments():

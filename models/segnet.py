@@ -13,7 +13,8 @@ import copy
 class SegNet(BaseModel):
     def __init__(self, num_classes, in_channels=3, pretrained=True, freeze_bn=False, freeze_backbone=False, **_):
         super(SegNet, self).__init__()
-        vgg_bn = models.vgg16_bn(weights='VGG16_BN_Weights.IMAGENET1K_V1')
+        # vgg_bn = models.vgg16_bn(weights='VGG16_BN_Weights.IMAGENET1K_V1')
+        vgg_bn = models.vgg16_bn(pretrained=True)
         encoder = list(vgg_bn.features.children())
 
         # Adjust the input size
